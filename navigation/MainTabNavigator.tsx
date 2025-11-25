@@ -4,11 +4,15 @@ import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { Platform, StyleSheet } from "react-native";
 import HomeStackNavigator from "@/navigation/HomeStackNavigator";
+import ReceiptsStackNavigator from "@/navigation/ReceiptsStackNavigator";
+import AccountsStackNavigator from "@/navigation/AccountsStackNavigator";
 import ProfileStackNavigator from "@/navigation/ProfileStackNavigator";
 import { useTheme } from "@/hooks/useTheme";
 
 export type MainTabParamList = {
   HomeTab: undefined;
+  ReceiptsTab: undefined;
+  AccountsTab: undefined;
   ProfileTab: undefined;
 };
 
@@ -50,6 +54,26 @@ export default function MainTabNavigator() {
           title: "Home",
           tabBarIcon: ({ color, size }) => (
             <Feather name="home" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="ReceiptsTab"
+        component={ReceiptsStackNavigator}
+        options={{
+          title: "Receipts",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="file-text" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="AccountsTab"
+        component={AccountsStackNavigator}
+        options={{
+          title: "Accounts",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="credit-card" size={size} color={color} />
           ),
         }}
       />
