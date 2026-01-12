@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   StyleSheet,
@@ -7,18 +7,20 @@ import {
   Pressable,
   Platform,
   Alert,
+  Modal,
+  Dimensions,
 } from "react-native";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import ScreenKeyboardAwareScrollView from "@/components/ScreenKeyboardAwareScrollView";
+import { ScreenKeyboardAwareScrollView } from "@/components/ScreenKeyboardAwareScrollView";
 import { ThemedText } from "@/components/ThemedText";
 import { Card } from "@/components/Card";
 import CategoryBadge from "@/components/CategoryBadge";
 import { useTheme } from "@/hooks/useTheme";
 import { storage } from "@/utils/storage";
-import { Receipt, CATEGORIES } from "@/types";
+import { Receipt, Transaction, CATEGORIES } from "@/types";
 import { Spacing, BorderRadius, Typography } from "@/constants/theme";
 import { ReceiptsStackParamList } from "@/navigation/ReceiptsStackNavigator";
 
@@ -52,7 +54,19 @@ export default function ReceiptProcessScreen() {
   const [selectedCategory, setSelectedCategory] = useState(
     existingReceipt?.category || "other"
   );
-  const [ocrProcessed, setOcrProcessed] = useState(false);
+  const [ocrProcessed, setOcrProcessed] = useState(!!existingReceipt);
+  const [isImageModalVisible, setIsImageModalVisible] = useState(false);
+
+  // Auto-trigger OCR processing in background for new receipts
+  useEffect(() => {
+    if (!existingReceipt && !ocrProcessed) {
+      // Trigger OCR processing automatically in the background
+      handleOCRProcess().catch((error) => {
+        console.error("Auto OCR processing failed:", error);
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleOCRProcess = async () => {
     setIsProcessing(true);
@@ -119,6 +133,29 @@ export default function ReceiptProcessScreen() {
 
     await storage.saveReceipt(receiptData);
 
+    // Create a transaction from the receipt so it appears on the dashboard
+    if (parsedAmount > 0) {
+      const accounts = await storage.getAccounts();
+      const activeAccount = accounts.find((acc) => acc.isActive) || accounts[0];
+      
+      if (activeAccount) {
+        const transaction: Transaction = {
+          id: `txn_${receiptData.id}`,
+          accountId: activeAccount.id,
+          userId: "1",
+          amount: parsedAmount,
+          date: receiptData.date,
+          merchantName: receiptData.merchantName,
+          category: receiptData.category,
+          pending: false,
+          receiptId: receiptData.id,
+          createdAt: new Date().toISOString(),
+        };
+
+        await storage.saveTransaction(transaction);
+      }
+    }
+
     if (Platform.OS === "ios") {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
@@ -127,27 +164,42 @@ export default function ReceiptProcessScreen() {
   };
 
   return (
-    <ScreenKeyboardAwareScrollView>
-      <View style={styles.imageContainer}>
-        <Image source={{ uri: imageUri }} style={styles.receiptImage} resizeMode="cover" />
-        {!ocrProcessed && !existingReceipt && (
-          <View style={styles.ocrOverlay}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.ocrButton,
-                { backgroundColor: theme.primary, opacity: pressed ? 0.8 : 1 },
-              ]}
-              onPress={handleOCRProcess}
-              disabled={isProcessing}
-            >
-              <Feather name={isProcessing ? "loader" : "cpu"} size={20} color="#FFFFFF" />
-              <ThemedText style={styles.ocrButtonText}>
-                {isProcessing ? "Processing..." : "Auto-Extract Details"}
-              </ThemedText>
-            </Pressable>
+    <>
+      <ScreenKeyboardAwareScrollView>
+        <Pressable
+          onPress={() => {
+            setIsImageModalVisible(true);
+            if (Platform.OS === "ios") {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }
+          }}
+          style={styles.imageContainer}
+        >
+          <Image source={{ uri: imageUri }} style={styles.receiptImage} resizeMode="cover" />
+          <View style={styles.imageOverlay}>
+            <View style={[styles.zoomHint, { backgroundColor: "rgba(0,0,0,0.5)" }]}>
+              <Feather name="maximize-2" size={20} color="#FFFFFF" />
+              <ThemedText style={styles.zoomHintText}>Tap to view full size</ThemedText>
+            </View>
           </View>
-        )}
-      </View>
+          {!ocrProcessed && !existingReceipt && (
+            <View style={styles.ocrOverlay}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.ocrButton,
+                  { backgroundColor: theme.primary, opacity: pressed ? 0.8 : 1 },
+                ]}
+                onPress={handleOCRProcess}
+                disabled={isProcessing}
+              >
+                <Feather name={isProcessing ? "loader" : "cpu"} size={20} color="#FFFFFF" />
+                <ThemedText style={styles.ocrButtonText}>
+                  {isProcessing ? "Processing..." : "Auto-Extract Details"}
+                </ThemedText>
+              </Pressable>
+            </View>
+          )}
+        </Pressable>
 
       {ocrProcessed && (
         <View style={[styles.ocrBanner, { backgroundColor: theme.success + "20" }]}>
@@ -241,7 +293,7 @@ export default function ReceiptProcessScreen() {
                 }
               }}
             >
-              <CategoryBadge category={category.id} size="large" />
+              <CategoryBadge categoryId={category.id} size="medium" />
               <ThemedText
                 style={[
                   styles.categoryName,
@@ -266,6 +318,34 @@ export default function ReceiptProcessScreen() {
         </Pressable>
       </View>
     </ScreenKeyboardAwareScrollView>
+
+    <Modal
+      visible={isImageModalVisible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setIsImageModalVisible(false)}
+    >
+      <View style={styles.modalContainer}>
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setIsImageModalVisible(false)}
+        />
+        <View style={styles.modalContent}>
+          <Pressable
+            style={styles.closeButton}
+            onPress={() => setIsImageModalVisible(false)}
+          >
+            <Feather name="x" size={24} color="#FFFFFF" />
+          </Pressable>
+          <Image
+            source={{ uri: imageUri }}
+            style={styles.fullScreenImage}
+            resizeMode="contain"
+          />
+        </View>
+      </View>
+    </Modal>
+    </>
   );
 }
 
@@ -391,5 +471,62 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 17,
     fontWeight: "600",
+  },
+  imageOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "flex-start",
+    alignItems: "flex-start",
+    padding: Spacing.sm,
+    pointerEvents: "none",
+  },
+  zoomHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.xs,
+    gap: Spacing.xs,
+  },
+  zoomHintText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "500",
+  },
+  modalContainer: {
+    flex: 1,
+    position: "relative",
+  },
+  modalBackdrop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.9)",
+  },
+  modalContent: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  closeButton: {
+    position: "absolute",
+    top: Spacing.xl + 20,
+    right: Spacing.xl,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  fullScreenImage: {
+    width: Dimensions.get("window").width,
+    height: Dimensions.get("window").height,
   },
 });

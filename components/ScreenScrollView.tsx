@@ -44,3 +44,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl,
   },
 });
+
+export default ScreenScrollView;

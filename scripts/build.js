@@ -29,6 +29,7 @@ function setupSignalHandlers() {
 }
 
 function getDeploymentUrl() {
+  // Support Replit environment variables if present (for backward compatibility)
   if (process.env.REPLIT_INTERNAL_APP_DOMAIN) {
     const url = `https://${process.env.REPLIT_INTERNAL_APP_DOMAIN}`;
     console.log("Using REPLIT_INTERNAL_APP_DOMAIN:", url);
@@ -41,10 +42,14 @@ function getDeploymentUrl() {
     return url;
   }
 
-  console.error(
-    "ERROR: REPLIT_INTERNAL_APP_DOMAIN and REPLIT_DEV_DOMAIN not set",
-  );
-  process.exit(1);
+  // For local development, use localhost
+  if (process.env.DEPLOYMENT_URL) {
+    return process.env.DEPLOYMENT_URL;
+  }
+
+  // Default to localhost for local development
+  console.log("Using default localhost URL for local development");
+  return "http://localhost:8081";
 }
 
 function prepareDirectories(timestamp) {

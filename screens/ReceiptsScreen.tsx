@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { View, StyleSheet, Pressable, Alert, Image } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
@@ -12,14 +14,26 @@ import { useTheme } from "@/hooks/useTheme";
 import { storage } from "@/utils/storage";
 import { Receipt } from "@/types";
 import { Spacing } from "@/constants/theme";
+import { ReceiptsStackParamList } from "@/navigation/ReceiptsStackNavigator";
+
+type ReceiptsScreenNavigationProp = NativeStackNavigationProp<ReceiptsStackParamList, "Receipts">;
 
 export default function ReceiptsScreen() {
+  const navigation = useNavigation<ReceiptsScreenNavigationProp>();
   const { theme } = useTheme();
   const [receipts, setReceipts] = useState<Receipt[]>([]);
 
   useEffect(() => {
     loadReceipts();
   }, []);
+
+  // Reload receipts when screen comes into focus (after processing)
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", () => {
+      loadReceipts();
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   const loadReceipts = async () => {
     const data = await storage.getReceipts();
@@ -47,27 +61,8 @@ export default function ReceiptsScreen() {
   };
 
   const handleReceiptCapture = async (imageUri: string) => {
-    const newReceipt: Receipt = {
-      id: Date.now().toString(),
-      userId: "1",
-      imageUri,
-      merchantName: "Sample Merchant",
-      totalAmount: 0,
-      currency: "USD",
-      date: new Date().toISOString(),
-      category: "other",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    await storage.saveReceipt(newReceipt);
-    await loadReceipts();
-    
-    Alert.alert(
-      "Receipt Captured",
-      "In the full version, this would use OCR to extract transaction details automatically.",
-      [{ text: "OK" }]
-    );
+    // Navigate to ReceiptProcessScreen to process the receipt
+    navigation.navigate("ReceiptProcess", { imageUri });
   };
 
   return (

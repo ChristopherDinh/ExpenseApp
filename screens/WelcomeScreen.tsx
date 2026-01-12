@@ -1,18 +1,18 @@
 import React from "react";
 import { View, StyleSheet, Image, Pressable } from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { useTheme } from "@/hooks/useTheme";
+import { useAuth } from "@/hooks/useAuth";
 import { Spacing, BorderRadius, Typography } from "@/constants/theme";
-import { RootStackParamList } from "@/navigation/RootNavigator";
-
-type WelcomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "Welcome">;
 
 export default function WelcomeScreen() {
-  const navigation = useNavigation<WelcomeScreenNavigationProp>();
   const { theme } = useTheme();
+  const { signIn } = useAuth();
+
+  const handleGetStarted = async () => {
+    await signIn("apple"); // Use any provider, it's just a mock sign-in
+  };
 
   return (
     <ThemedView style={styles.container}>
@@ -34,7 +34,7 @@ export default function WelcomeScreen() {
             styles.button,
             { backgroundColor: theme.primary, opacity: pressed ? 0.8 : 1 },
           ]}
-          onPress={() => navigation.navigate("SignIn")}
+          onPress={handleGetStarted}
         >
           <ThemedText style={styles.buttonText}>Get Started</ThemedText>
         </Pressable>
